@@ -1,237 +1,306 @@
 @tool
 extends Node
 
-var shader_file_regex = RegEx.new()
+#region Shaders Files
 
-var shader_files : Array = Array()
-var compute_shader_file_paths : Array = Array()
+var shader_file_regex := RegEx.new()
 
-var rd : RenderingDevice
+## List of every acompute shaders
+var compute_shader_file_paths: Array[String] = []
 
-var shader_compilations = {}
-var shader_code_cache = {}
+## Shader name to file path (ex: "MyCompute" -> "res://shaders/MyCompute.acompute")
+var compute_name_to_path: Dictionary[String, String] = {}
 
-var compute_shader_kernel_compilations = {}
+## Source cache for live reload
+var shader_code_cache := {}
 
-func find_files(dir_name) -> void:
-	var dir = DirAccess.open(dir_name)
+#endregion
 
-	if dir:
-		dir.list_dir_begin()
-		var file_name = dir.get_next()
-		while file_name != "":
-			if dir.current_is_dir():
-				find_files(dir_name + '/' + file_name)
-			else:
-				# if file_name.get_extension() == 'glsl'and shader_file_regex.search(file_name):
-				# 	shader_files.push_back(dir_name + '/' + file_name)
+#region Device Cache
 
-				if file_name.get_extension() == 'acompute':
-					compute_shader_file_paths.push_back(dir_name + '/' + file_name)
-			
-			file_name = dir.get_next()
+## device_id (int) -> { compute_shader_name -> Array[RID] }
+var device_compute_kernel_compilations: Dictionary[int, Dictionary] = {}
 
+## device_id (int) -> weak ref to device (so we can recompile on changes)
+var device_refs: Dictionary[int, WeakRef] = {}
+
+#endregion
+
+## Options
+const USE_INCLUDE: bool = true # To allow the usage of includes until this proposal get accepted and completed: https://github.com/godotengine/godot-proposals/issues/6691
+const HOT_RELOADING: bool = true
+
+var AUTO_GLOBAL_COMPILE: bool = true:
+	set(value):
+		AUTO_GLOBAL_COMPILE = value
+		
+		if AUTO_GLOBAL_COMPILE:
+			var global_rd: RenderingDevice = RenderingServer.get_rendering_device()
+			register_device(global_rd)
+			_compile_all_shaders_on_device(global_rd)
+
+#region Utility
+static func _device_id(rd: RenderingDevice) -> int:
+	return rd.get_instance_id()
+
+func _ensure_device_maps(rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	if id not in device_compute_kernel_compilations:
+		device_compute_kernel_compilations[id] = {} as Dictionary[String, Array]
+	if id not in device_refs:
+		device_refs[id] = weakref(rd)
+
+func _free_device_compilations(rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	assert(id in device_compute_kernel_compilations)
+	
+	for cname: String in device_compute_kernel_compilations[id]:
+		for kernel_rid in device_compute_kernel_compilations[id][cname]:
+			if kernel_rid.is_valid():
+				rd.free_rid(kernel_rid)
+	
+	device_compute_kernel_compilations[id].clear()
+
+func _compile_all_shaders_on_device(rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	for shader_name: String in compute_name_to_path:
+		if shader_name not in device_compute_kernel_compilations[id]:
+			compile_shader_on_device(shader_name, rd)
+#endregion
+
+#region File Scan
+func find_files(dir_name: String) -> void:
+	var dir := DirAccess.open(dir_name)
+	if not dir:
+		return
+	
+	dir.list_dir_begin()
+	var file_name: String = dir.get_next()
+	while file_name != "":
+		if dir.current_is_dir():
+			find_files(dir_name + "/" + file_name)
+		else:
+			var ext: String = file_name.get_extension()
+			if ext == "acompute":
+				var p: String = dir_name + "/" + file_name
+				compute_shader_file_paths.push_back(p)
+				compute_name_to_path[get_shader_name(p)] = p
+			# If you want .glsl single-compute files, handle here similarly.
+		file_name = dir.get_next()
 
 func get_shader_name(file_path: String) -> String:
 	return file_path.get_file().split(".")[0]
+#endregion
 
+#region Compilation
+func compile_acompute_on_device(compute_shader_file_path: String, rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	assert(id in device_refs)
 
-func compile_shader(shader_file_path) -> void:
-	var shader_name = shader_file_path.split("/")[-1].split(".glsl")[0]
+	var compute_shader_name: String = get_shader_name(compute_shader_file_path)
+	print("Compiling Compute Shader (device %s): %s" % [str(id), compute_shader_name])
 
-	if shader_compilations.has(shader_name):
-		if shader_compilations[shader_name].is_valid():
-			print("Freeing: " + shader_name)
-			rd.free_rid(shader_compilations[shader_name])
-	
-	var shader_code = FileAccess.open(shader_file_path, FileAccess.READ).get_as_text()
-	shader_code_cache[shader_name] = shader_code
-
-	var shader_compilation = RID()
-
-	var shader_source : RDShaderSource = RDShaderSource.new()
-	shader_source.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-	shader_source.source_compute = shader_code
-	var shader_spirv : RDShaderSPIRV = rd.shader_compile_spirv_from_source(shader_source)
-
-	if shader_spirv.compile_error_compute != "":
-		push_error(shader_spirv.compile_error_compute)
-		push_error("In: " + shader_code)
-		return
-		
-	print("Compiling: " + shader_name)
-	shader_compilation = rd.shader_create_from_spirv(shader_spirv)
-
-	if not shader_compilation.is_valid():
-		return
-
-	shader_compilations[shader_name] = shader_compilation
-
-
-func compile_compute_shader(compute_shader_file_path) -> void:
-	var compute_shader_name = get_shader_name(compute_shader_file_path)
-
-	print("Compiling Compute Shader: " + compute_shader_name)
-
-	var file = FileAccess.open(compute_shader_file_path, FileAccess.READ)
-	var raw_shader_code_string = file.get_as_text()
+	var file := FileAccess.open(compute_shader_file_path, FileAccess.READ)
+	var raw_shader_code_string: String = file.get_as_text()
 	shader_code_cache[compute_shader_file_path] = raw_shader_code_string
 
-	var raw_shader_code = raw_shader_code_string.split("\n")
+	var raw_lines: PackedStringArray = raw_shader_code_string.split("\n")
+	var kernel_names: Array[String]
 	
-	var kernel_names = Array()
-
-	# Strip out kernel names
+	var current_line_index: int = 0
+	
+	# Read reconized preprocessed instructions
 	while file.get_position() < file.get_length():
-		var line = file.get_line()
-
+		#TODO: Why get line when you can use raw_lines ?
+		var line: String = file.get_line()
+		# Read leading "#kernel" lines
 		if line.begins_with("#kernel "):
-			var kernel_name = line.split("#kernel")[1].strip_edges()
-			# print("Kernel Found: " + kernel_name)
-			kernel_names.push_back(kernel_name)
-			raw_shader_code.remove_at(0)
+			var k: String = line.split("#kernel")[1].strip_edges()
+			kernel_names.push_back(k)
+			raw_lines.remove_at(0)
 		else:
+			current_line_index += 1
 			break
-
-	# If no kernels defined at top of file, fail to compile
-	if kernel_names.size() == 0:
+	
+	if kernel_names.is_empty():
 		push_error("Failed to compile: " + compute_shader_file_path)
 		push_error("Reason: No kernels found")
 		return
 
-
-	# If no code after kernel definitions or if nothing in file at all, fail to compile
 	if file.get_position() >= file.get_length():
 		push_error("Failed to compile: " + compute_shader_file_path)
 		push_error("Reason: No shader code found")
 		return
-
-	# Verify kernels exist
-	raw_shader_code_string = "\n".join(raw_shader_code)
-	for kernel_name in kernel_names:
-		if not raw_shader_code_string.contains(kernel_name):
+	
+	if USE_INCLUDE:
+		while file.get_position() < file.get_length():
+			#TODO: Why get line when you can use raw_lines ?
+			var line: String = file.get_line()
+			
+			# Read leading "#include" lines
+			if line.begins_with("#include "):
+				var include_path: String = line.split("#include")[1].strip_edges()
+				var path: String = include_path.substr(1, include_path.length() - 2)
+				
+				if not path.begins_with("res://"):
+					path = compute_shader_file_path.get_base_dir().path_join(path)
+				
+				var include_file := FileAccess.open(path, FileAccess.READ)
+				var raw_include_lines: PackedStringArray = include_file.get_as_text().split("\n")
+				
+				raw_lines = raw_lines.slice(0, current_line_index) + raw_include_lines + raw_lines.slice(current_line_index + 1, raw_lines.size())
+				current_line_index += raw_include_lines.size()
+			
+			current_line_index += 1
+	
+	#TODO: Better than join everything to find a simple kernel name
+	var body_str: String = "\n".join(raw_lines)
+	for kname: String in kernel_names:
+		if not body_str.contains(kname):
 			push_error("Failed to compile: " + compute_shader_file_path)
-			push_error("Reason: " + kernel_name + " kernel not found!")
-
-	var kernel_to_thread_group_count = {}
-
-	# Find kernels and extract thread groups
-	for i in raw_shader_code.size():
-		var line = raw_shader_code[i]
-
-		for kernel_name in kernel_names:
-			if line.contains(kernel_name) and line.contains('void'):
-				# print("Found kernel " + kernel_name  + " at line " + str(i + kernel_names.size() + 1))
-
-				# find thread group count by searching previous line of code from kernel function
-				var newLine = raw_shader_code[i - 1].strip_edges()
-				if newLine.contains('numthreads'):
-					var thread_groups = newLine.split('(')[-1].split(')')[0].split(',')
-					if thread_groups.size() != 3:
+			push_error("Reason: " + kname + " kernel not found!")
+			return
+	
+	# Extract local sizes
+	var kernel_to_tg: Dictionary[String, Array] # kname -> [x,y,z]
+	for i in raw_lines.size():
+		var line: String = raw_lines[i]
+		for kname: String in kernel_names:
+			if line.contains(kname) and line.contains("void"):
+				var prev: String = raw_lines[i - 1].strip_edges()
+				if prev.contains("numthreads"):
+					var tg: PackedStringArray = prev.split("(")[-1].split(")")[0].split(",")
+					if tg.size() != 3:
 						push_error("Failed to compile: " + compute_shader_file_path)
 						push_error("Reason: kernel thread group syntax error")
-
-					kernel_to_thread_group_count[kernel_name] = Array()
-					for n in thread_groups.size():
-						kernel_to_thread_group_count[kernel_name].push_back((thread_groups[n].strip_edges()))
-
-					raw_shader_code.set(i - 1, "")
-
-					# print(kernel_to_thread_group_count[kernel_name])
+						return
+					kernel_to_tg[kname] = [tg[0].strip_edges(), tg[1].strip_edges(), tg[2].strip_edges()]
+					raw_lines[i - 1] = ""
 				else:
 					push_error("Failed to compile: " + compute_shader_file_path)
 					push_error("Reason: kernel thread group count not found")
 					return
-
-	# Compile kernels
-	compute_shader_kernel_compilations[compute_shader_name] = Array()
-	for kernel_name in kernel_names:
-		var shader_code = PackedStringArray(raw_shader_code)
-
-		# Insert GLSL thread group layout for the kernel
-		var thread_group = kernel_to_thread_group_count[kernel_name]
-		shader_code.insert(0, "layout(local_size_x = " + thread_group[0] + ", local_size_y = " + thread_group[1] + ", local_size_z = " + thread_group[2] + ") in;")
-
-		# Insert GLSL version at top of file
-		shader_code.insert(0, "#version 450")
-
-		# Replace kernel name with main
-		var shader_code_string = "\n".join(shader_code).replace(kernel_name, "main")
-
-		# Compile shader
-
-		var shader_compilation = RID()
-
-		var shader_source : RDShaderSource = RDShaderSource.new()
-		shader_source.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-		shader_source.source_compute = shader_code_string
-		var shader_spirv : RDShaderSPIRV = rd.shader_compile_spirv_from_source(shader_source)
-
-		if shader_spirv.compile_error_compute != "":
-			push_error(shader_spirv.compile_error_compute)
-			push_error("In: " + shader_code_string)
-			return
-			
-		print("- Compiling Kernel: " + kernel_name)
-		shader_compilation = rd.shader_create_from_spirv(shader_spirv)
-
-		if not shader_compilation.is_valid():
-			return
-
-		compute_shader_kernel_compilations[compute_shader_name].push_back(shader_compilation)
-
-		# print(shader_code_string)
-
-	# print("\n".join(raw_shader_code))
-
-
-func _init() -> void:
-	rd = RenderingServer.get_rendering_device()
 	
+	# Free any old kernels for this device/file
+	if compute_shader_name in device_compute_kernel_compilations[id]:
+		for krid: RID in device_compute_kernel_compilations[id][compute_shader_name]:
+			if krid.is_valid():
+				rd.free_rid(krid)
+		device_compute_kernel_compilations[id][compute_shader_name].clear()
+	
+	# Compile each kernel
+	var kernels: Array[RID]
+	for kname: String in kernel_names:
+		var lines := PackedStringArray(raw_lines)
+		
+		var tg := kernel_to_tg[kname]
+		lines.insert(0, "layout(local_size_x = %s, local_size_y = %s, local_size_z = %s) in;" % [tg[0], tg[1], tg[2]])
+		lines.insert(0, "#version 450")
+		
+		var code := "\n".join(lines).replace(kname, "main")
+		
+		var src := RDShaderSource.new()
+		src.language = RenderingDevice.SHADER_LANGUAGE_GLSL
+		src.source_compute = code
+		var spirv := rd.shader_compile_spirv_from_source(src)
+		if spirv.compile_error_compute != "":
+			push_error(spirv.compile_error_compute)
+			push_error("In: " + code)
+			return
+		
+		var shader_rid := rd.shader_create_from_spirv(spirv)
+		if not shader_rid.is_valid():
+			return
+		
+		print("- Compiling Kernel (device %s): %s" % [str(id), kname])
+		kernels.push_back(shader_rid)
+	
+	device_compute_kernel_compilations[id][compute_shader_name] = kernels
+#endregion
+
+#region Public API
+## Must be called at least once per device (global or local).
+func register_device(rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	if id not in device_refs:
+		_ensure_device_maps(rd)
+
+## Must be called before a registered RenderingDevice is freed.
+func unregister_device(rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	_free_device_compilations(rd)
+	device_refs.erase(id)
+
+## Precompile a shader on a device.
+func compile_shader_on_device(shader_name: String, rd: RenderingDevice) -> void:
+	var id: int = _device_id(rd)
+	assert(id in device_refs)
+	assert(shader_name not in device_compute_kernel_compilations[id], "Shader \"%s\" already compiled on device." % [shader_name])
+	assert(shader_name in compute_name_to_path, "Shader \"%s\" not found." % [shader_name])
+	
+	compile_acompute_on_device(compute_name_to_path[shader_name], rd)
+
+## Get all kernel RIDs (Array[RID]) for a specific device.
+## If shader was not compiled for this device, we compile on demand.
+func get_compute_kernel_compilations_for_device(shader_name: String, rd: RenderingDevice) -> Array[RID]:
+	var id: int = _device_id(rd)
+	assert(id in device_refs)
+	
+	if shader_name not in device_compute_kernel_compilations[id]:
+		# Compile on demand
+		compile_shader_on_device(shader_name, rd)
+	
+	return device_compute_kernel_compilations[id][shader_name] as Array[RID]
+
+## Return the device shader id. For convenience, we use the first compiled kernel RID.
+func get_device_shader_id(shader_name: String, rd: RenderingDevice) -> RID:
+	var id: int = _device_id(rd)
+	assert(id in device_refs)
+	assert(shader_name in device_compute_kernel_compilations[id])
+	
+	return device_compute_kernel_compilations[id][shader_name][0]
+#endregion
+
+#region Life Cycle
+func _init() -> void:
+	# Initial scan
 	find_files("res://")
+	
+	# Register the Global Rendering Device
+	var global_rd: RenderingDevice = RenderingServer.get_rendering_device()
+	register_device(global_rd)
+	
+	if AUTO_GLOBAL_COMPILE:
+		_compile_all_shaders_on_device(global_rd)
 
-	for shader_file in shader_files:
-		compile_shader(shader_file)
-
-	for file_path in compute_shader_file_paths:
-		compile_compute_shader(file_path)
-
-
-func _process(delta: float) -> void:
-	# Compare current shader code with cached shader code and recompile if changed
-	for file_path in compute_shader_file_paths:
-		if shader_code_cache[file_path] != FileAccess.open(file_path, FileAccess.READ).get_as_text():
-			var shader_name = get_shader_name(file_path)
-
-			# Free existing kernels
-			for kernel in compute_shader_kernel_compilations[shader_name]:
-				rd.free_rid(kernel)
-
-			compute_shader_kernel_compilations[shader_name].clear()
-
-			compile_compute_shader(file_path)
-
+func _physics_process(delta: float) -> void:
+	if not HOT_RELOADING: return
+	
+	# Live reload for all registered devices
+	for shader_name: String in compute_name_to_path:
+		var file_path: String = compute_name_to_path[shader_name]
+		
+		#TODO: Better way to verify if file got edited
+		var current := FileAccess.open(file_path, FileAccess.READ).get_as_text()
+		if shader_code_cache.get(file_path, "") != current:
+			shader_code_cache[file_path] = current
+			
+			# Recompile on all devices that use this shader
+			for device_id: int in device_compute_kernel_compilations:
+				var kernel_compilations: Dictionary[String, Array] = device_compute_kernel_compilations[device_id]
+				
+				if shader_name in kernel_compilations:
+					var wr: WeakRef = device_refs[device_id]
+					var rd: RenderingDevice = wr.get_ref() if wr else null
+					assert(rd != null, "Rendering device freed witout calling \"unregister_device\".")
+					
+					compile_acompute_on_device(file_path, rd)
 
 func _notification(what):
-	if what == NOTIFICATION_PREDELETE or what == NOTIFICATION_WM_CLOSE_REQUEST:
-		var shader_names = shader_compilations.keys()
-
-		for shader_name in shader_names:
-			var shader = shader_compilations[shader_name]
-			if shader.is_valid():
-				print("Freeing: " + shader_name)
-				rd.free_rid(shader)
-
-		for compute_shader in compute_shader_kernel_compilations.keys():
-			for kernel in compute_shader_kernel_compilations[compute_shader]:
-				rd.free_rid(kernel)
-
-
-func get_shader_compilation(shader_name: String) -> RID:
-	return shader_compilations[shader_name]
-
-func get_compute_kernel_compilation(shader_name, kernel_index):
-	return compute_shader_kernel_compilations[shader_name][kernel_index]
-
-func get_compute_kernel_compilations(shader_name):
-	return compute_shader_kernel_compilations[shader_name]
+	if what == NOTIFICATION_PREDELETE:
+		# Free all per-device resources
+		for id: int in device_refs:
+			var rd := device_refs[id].get_ref()
+			if rd:
+				_free_device_compilations(rd)
+#endregion
