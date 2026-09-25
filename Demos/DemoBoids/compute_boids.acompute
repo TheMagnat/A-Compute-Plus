@@ -1,0 +1,128 @@
+#kernel ComputeBoids
+
+#include "multimesh_helper.acomputeinc"
+
+struct Boid {
+	vec2 position;
+	vec2 velocity;
+};
+
+layout(std430, set = 0, binding = 0) restrict buffer InstanceTransformBuffer {
+    float transformData[];
+};
+
+layout(std430, set = 0, binding = 1) restrict buffer Boids {
+	Boid boids[];
+};
+
+layout(push_constant, std430) uniform Params {
+	uint boid_count;
+	float delta_time;
+	float min_speed;
+	float max_speed;
+
+	float perception_radius;
+	float separation_radius;
+	float max_steer_force;
+	float bounds_margin; // Percent from 0 to 1
+
+	float separation_weight;
+	float alignment_weight;
+	float cohesion_weight;
+	float bounds_weight;
+
+	vec2 bounds_half_area; // half size of area
+	vec2 _pad;
+};
+
+vec2 steer_towards(vec2 direction, vec2 velocity) {
+	float len = length(direction);
+	if (len < 1e-5) return vec2(0.0);
+
+	vec2 steer = direction / len * max_speed - velocity;
+	float steer_len = length(steer);
+	if (steer_len > max_steer_force) steer *= max_steer_force / steer_len;
+	return steer;
+}
+
+[numthreads(1024, 1, 1)]
+void ComputeBoids() {
+	uint id = gl_GlobalInvocationID.x;
+	if (id >= boid_count) return;
+
+    uint selfTransformIndex = GET_INSTANCE_INDEX(id);
+
+	vec2 pos = boids[id].position;
+	vec2 vel = boids[id].velocity;
+
+	float perception_sq = perception_radius * perception_radius;
+	float separation_sq = separation_radius * separation_radius;
+
+	vec2 separation = vec2(0.0);
+	vec2 velocity_sum = vec2(0.0);
+	vec2 position_sum = vec2(0.0);
+	uint neighbor_count = 0;
+
+	for (uint i = 0; i < boid_count; i++) {
+		if (i == id) continue;
+
+		vec2 other_pos = boids[i].position;
+		vec2 offset = other_pos - pos;
+		float dist_sq = dot(offset, offset);
+
+		if (dist_sq < perception_sq) {
+			neighbor_count++;
+			velocity_sum += boids[i].velocity;
+			position_sum += other_pos;
+
+			// Push away harder the closer the neighbor is
+			if (dist_sq < separation_sq && dist_sq > 1e-5) {
+				separation -= offset / dist_sq;
+			}
+		}
+	}
+
+	vec2 acceleration = vec2(0.0);
+
+	if (neighbor_count > 0) {
+		vec2 average_velocity = velocity_sum / float(neighbor_count);
+		vec2 center = position_sum / float(neighbor_count);
+
+		acceleration += steer_towards(average_velocity, vel) * alignment_weight;
+		acceleration += steer_towards(center - pos, vel) * cohesion_weight;
+		acceleration += steer_towards(separation, vel) * separation_weight;
+	}
+
+	// Border avoidance: steer inward when getting close to the border, harder the closer it is
+	vec2 dist_to_border = bounds_half_area - abs(pos);
+	vec2 urgency = 1.0 - smoothstep(vec2(0.0), bounds_half_area * bounds_margin, dist_to_border);
+	vec2 away = -sign(pos) * urgency;
+	acceleration += steer_towards(away, vel) * bounds_weight * max(urgency.x, urgency.y);
+
+	vel += acceleration * delta_time;
+
+	float speed = length(vel);
+	if (speed > 1e-5) {
+		vel *= clamp(speed, min_speed, max_speed) / speed;
+	}
+
+	pos += vel * delta_time;
+
+	boids[id].position = pos;
+	boids[id].velocity = vel;
+
+    transformData[selfTransformIndex + INSTANCE_X_POS] = pos.x;
+    transformData[selfTransformIndex + INSTANCE_Y_POS] = pos.y;
+
+    if (speed > 1e-5) {
+		vec2 dir = vel / length(vel);
+    
+		vec2 y_axis = -dir;
+		vec2 x_axis = vec2(-dir.y, dir.x);
+
+		transformData[selfTransformIndex + INSTANCE_XX] = x_axis.x;
+		transformData[selfTransformIndex + INSTANCE_YX] = y_axis.x;
+		transformData[selfTransformIndex + INSTANCE_XY] = x_axis.y;
+		transformData[selfTransformIndex + INSTANCE_YY] = y_axis.y;
+	}
+}

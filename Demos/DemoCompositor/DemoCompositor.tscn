@@ -1,0 +1,105 @@
+[gd_scene format=3 uid="uid://b4noapyyvmmcl"]
+
+[ext_resource type="Script" uid="uid://cm4vfkiwalf6l" path="res://DemoCompositor/exposure_shader.gd" id="1_s3f4y"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_pygu6"]
+sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+ground_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
+
+[sub_resource type="Sky" id="Sky_a2lyd"]
+sky_material = SubResource("ProceduralSkyMaterial_pygu6")
+
+[sub_resource type="Environment" id="Environment_cixpd"]
+background_mode = 2
+sky = SubResource("Sky_a2lyd")
+glow_enabled = true
+
+[sub_resource type="CompositorEffect" id="CompositorEffect_srs23"]
+resource_local_to_scene = false
+resource_name = ""
+enabled = true
+effect_callback_type = 4
+needs_motion_vectors = false
+needs_normal_roughness = false
+script = ExtResource("1_s3f4y")
+metadata/_custom_type_script = "uid://cm4vfkiwalf6l"
+
+[sub_resource type="Compositor" id="Compositor_pygu6"]
+compositor_effects = Array[CompositorEffect]([SubResource("CompositorEffect_srs23")])
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_cixpd"]
+albedo_color = Color(1, 0.5372549, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_srs23"]
+size = Vector3(5, 0.5, 5)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_a2lyd"]
+albedo_color = Color(0.09803922, 1, 1, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_rhxb6"]
+
+[sub_resource type="Animation" id="Animation_orvm3"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Cube:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector3(0, 0, 0)]
+}
+
+[sub_resource type="Animation" id="Animation_72ue6"]
+resource_name = "idle"
+length = 2.0
+loop_mode = 1
+step = 0.0333333
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Cube:rotation")
+tracks/0/interp = 2
+tracks/0/loop_wrap = false
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 2),
+"transitions": PackedFloat32Array(1, 2),
+"update": 0,
+"values": [Vector3(0, 0, 0), Vector3(0, 6.2831855, 0)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_031fd"]
+_data = {
+&"RESET": SubResource("Animation_orvm3"),
+&"idle": SubResource("Animation_72ue6")
+}
+
+[node name="DemoCompositor" type="Node3D" unique_id=1120709654]
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=375956653]
+transform = Transform3D(-0.8660254, -0.43301278, 0.25, 0, 0.49999997, 0.86602545, -0.50000006, 0.75, -0.43301266, 0, 0, 0)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=791427606]
+environment = SubResource("Environment_cixpd")
+compositor = SubResource("Compositor_pygu6")
+
+[node name="Camera3D" type="Camera3D" parent="." unique_id=653684124]
+transform = Transform3D(1, 0, 0, 0, 0.6778193, 0.7352286, 0, -0.7352286, 0.6778193, 0, 2.1008995, 2.766705)
+
+[node name="Ground" type="MeshInstance3D" parent="." unique_id=413885732]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, 0)
+material_override = SubResource("StandardMaterial3D_cixpd")
+mesh = SubResource("BoxMesh_srs23")
+
+[node name="Cube" type="MeshInstance3D" parent="." unique_id=377811263]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.66839075, 0)
+material_override = SubResource("StandardMaterial3D_a2lyd")
+mesh = SubResource("BoxMesh_rhxb6")
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="." unique_id=860099305]
+libraries/ = SubResource("AnimationLibrary_031fd")
+autoplay = &"idle"

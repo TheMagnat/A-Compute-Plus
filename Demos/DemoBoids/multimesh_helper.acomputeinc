@@ -1,0 +1,11 @@
+// Per instance: 8 floats (32 bytes)
+#define INSTANCE_STRIDE 8
+#define INSTANCE_X_POS 3
+#define INSTANCE_Y_POS 7
+
+#define INSTANCE_XX 0
+#define INSTANCE_YX 1
+#define INSTANCE_XY 4
+#define INSTANCE_YY 5
+
+#define GET_INSTANCE_INDEX(index) (index * INSTANCE_STRIDE)

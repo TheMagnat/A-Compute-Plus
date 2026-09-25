@@ -1,0 +1,66 @@
+[gd_scene format=3 uid="uid://b1d61bvj02b62"]
+
+[ext_resource type="Script" uid="uid://bn4813bq0cb3t" path="res://Demos/DemoBoids/boid_computer.gd" id="1_yt60i"]
+[ext_resource type="Shader" uid="uid://bkr4dd7pbj4jh" path="res://Demos/DemoBoids/boids_shader.gdshader" id="2_bo2yx"]
+[ext_resource type="Shader" uid="uid://bpydixw80c6bw" path="res://Demos/DemoBoids/color_inverse.gdshader" id="3_myjab"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_yt60i"]
+shader = ExtResource("2_bo2yx")
+
+[sub_resource type="PrismMesh" id="PrismMesh_yt60i"]
+material = SubResource("ShaderMaterial_yt60i")
+size = Vector3(1, -30, 1)
+
+[sub_resource type="Environment" id="Environment_srs23"]
+background_mode = 3
+glow_enabled = true
+glow_levels/1 = 0.01
+glow_levels/2 = 0.01
+glow_levels/3 = 0.01
+glow_levels/4 = 0.01
+glow_levels/5 = 0.01
+glow_levels/6 = 0.02
+glow_strength = 2.0
+glow_bloom = 1.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_myjab"]
+shader = ExtResource("3_myjab")
+
+[node name="DemoBoids" type="Node2D" unique_id=246424287]
+
+[node name="BoidComputer" type="Node" parent="." unique_id=696507321]
+script = ExtResource("1_yt60i")
+material = SubResource("ShaderMaterial_yt60i")
+mesh = SubResource("PrismMesh_yt60i")
+size = 10000
+area = Vector2(1152, 648)
+min_speed = 100.0
+max_speed = 250.0
+perception_radius = 60.0
+separation_radius = 35.0
+max_steer_force = 200.0
+bounds_margin = 0.3
+separation_weight = 1.5
+alignment_weight = 0.8
+cohesion_weight = 0.5
+bounds_weight = 3.0
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1189605808]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=460868535]
+environment = SubResource("Environment_srs23")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=1218344330]
+layer = 2
+
+[node name="ColorRect" type="ColorRect" parent="CanvasLayer" unique_id=1452365484]
+material = SubResource("ShaderMaterial_myjab")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -3776.0
+offset_top = -1851.0
+offset_right = 2364.0
+offset_bottom = 1362.0
+grow_horizontal = 2
+grow_vertical = 2
