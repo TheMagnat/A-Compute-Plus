@@ -14,7 +14,7 @@ var multiMeshInstance: MultiMeshInstance2D
 var multimeshBufferRid: RID
 
 @export var material: Material
-@export var mesh: Mesh
+@export var mesh: PrimitiveMesh
 
 @export var size: int = 100
 @export var area := Vector2(500.0, 500.0)
@@ -53,7 +53,7 @@ func _ready() -> void:
 	add_child(color_rect)
 
 func initialize() -> void:
-	var initial_pos = PackedVector2Array()
+	var initial_pos := PackedVector2Array()
 	initial_pos.resize(size)
 	for i: int in size:
 		var random_pos := Vector2(randf_range(-area.x / 2.0, area.x / 2.0), randf_range(-area.y / 2.0, area.y / 2.0))
@@ -159,4 +159,5 @@ func _physics_process(delta: float) -> void:
 
 func registerComputeShader() -> void:
 	rd = RenderingServer.create_local_rendering_device()
-	boidsCompute = ACompute.new('compute_boids', rd, true)
+	boidsCompute = ACompute.new(preload("uid://c0p328gh5goff"), rd, true)
+	#boidsCompute = ACompute.new(preload("res://Demos/DemoBoids/compute_boids.acompute"), rd, true)

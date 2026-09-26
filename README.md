@@ -10,9 +10,13 @@ Because ACompute is technically a custom shader language, it needs its own inter
 
 ## Plus Features
 
-- Parsing include files using the `#include "path"` instruction in your ACompute Shaders
-- Ability to use Local Devices instead of Global Rendering Devices
-- Usage of storage buffers
+> List the differences with the original Aeroal Compute
+
+- Parsing include files using the `#include "path"` instruction in your ACompute Shaders.
+- Ability to use Local Devices instead of Global Rendering Devices.
+- Usage of storage buffers.
+- Merges "#kernel" and "[numthreads(x, y, z)]" declarations with an unique "#kernel [numthreads(x, y, z)]" to put before your functions. Inspired from [Essojadojef](https://github.com/Essojadojef) work.
+- New custom resource "AComputeShader". This resource got it's own "EditorImportPlugin", allowing Godot editor to scan and import our files. They are then pre-parsed and stored as ResourceFiles. The AcerolaShaderCompiler just have to compile the code directly. This allow us to make usage of the Godot auto-reimport system and signals for the hot reload (without having to scan every frames for any changes which was the old way). The resources are shown in the editor when the plugin is activated and clicking on it will open the ACompute shader file in an external editor. This was sugested by [nonchip](github.com/GarrettGunnell/Acerola-Compute/issues/6).
 
 ## Usage
 
@@ -23,6 +27,7 @@ You can refer to the demo project to see how to use the addon.
 - Having more than one ACompute shader with the same name does not work to the way we store shaders. This is a limitation that could be easily fixed.
 - Hot reloading does not work with new files. You must restart your scene.
 - Using sparse binding in your ACompute shaders (ex: 0, 2, 3) will result in an error. This is a limitation that could be easily fixed.
+- Currently editing an include file won't trigger a Hot Reload, I'm planning to add this features soon.
 
 ## Contributing
 

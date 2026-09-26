@@ -6,7 +6,7 @@ var rd : RenderingDevice
 var owns_local_device: bool = false  # If we own the local RD and should free it
 var use_local_device: bool = false # if we're using a local RD
 
-var shader_name : String
+var shader : AComputeShader
 var shader_id : RID
 var push_constant : PackedByteArray
 var uniform_set_gpu_id : RID
@@ -58,20 +58,20 @@ func set_uniform_buffer(binding: int, uniform_array: PackedByteArray) -> void:
 	if uniform_buffer_cache.has(binding):
 		
 		# if buffer is identical, no need to change
-		if uniform_array == uniform_buffer_cache.get(binding):
+		if uniform_array == uniform_buffer_cache[binding]:
 			return
 		
 		# if new values but same buffer size, update gpu buffer
 		if uniform_array.size() == uniform_buffer_cache[binding].size():
-			rd.buffer_update(uniform_buffer_id_cache.get(binding), 0, uniform_array.size(), uniform_array)
+			rd.buffer_update(uniform_buffer_id_cache[binding], 0, uniform_array.size(), uniform_array)
 			uniform_buffer_cache[binding] = PackedByteArray(uniform_array)
 			return
 		
 		# Otherwise, free the memory because footprint no longer matches
-		rd.free_rid(uniform_buffer_id_cache.get(binding))
+		rd.free_rid(uniform_buffer_id_cache[binding])
 	
 	# Instantiate uniform buffer in gpu memory and declare uniform descriptor
-	var uniform_buffer_id = rd.uniform_buffer_create(uniform_array.size(), uniform_array)
+	var uniform_buffer_id: RID = rd.uniform_buffer_create(uniform_array.size(), uniform_array)
 	
 	var u : RDUniform = RDUniform.new()
 	
@@ -92,12 +92,12 @@ func set_storage_buffer(binding: int, storage_array: PackedByteArray) -> void:
 	
 		# if new values but same buffer size, update gpu buffer
 		if byte_size == storage_buffer_cache_size[binding]:
-			rd.buffer_update(storage_buffer_id_cache.get(binding), 0, byte_size, storage_array)
+			rd.buffer_update(storage_buffer_id_cache[binding], 0, byte_size, storage_array)
 			storage_buffer_cache_size[binding] = byte_size
 			return
 		
 		# Otherwise, free the memory because footprint no longer matches
-		rd.free_rid(storage_buffer_id_cache.get(binding))
+		rd.free_rid(storage_buffer_id_cache[binding])
 	
 	# Instantiate storage buffer in gpu memory and declare uniform descriptor
 	var storage_buffer_id := rd.storage_buffer_create(storage_array.size(), storage_array)
@@ -178,7 +178,7 @@ func _cache_uniform(u: RDUniform) -> void:
 ## If no device is injected, ACompute will use the Global Rendering Device.
 ## You can leave the responsibility of the RD to the ACompute object,
 ## which will handle registering and releasing the RD upon free.
-func _init(_shader_name: String, _rd: RenderingDevice = null, _owns_local_device: bool = false) -> void:
+func _init(_shader: AComputeShader, _rd: RenderingDevice = null, _owns_local_device: bool = false) -> void:
 	assert(_rd != RenderingServer.get_rendering_device(), "To use the Global Rendering device, provide a null RD.")
 	assert(_rd != null or not _owns_local_device, "When using Global Rendering device, owns_local_device must be false.")
 	
@@ -192,16 +192,16 @@ func _init(_shader_name: String, _rd: RenderingDevice = null, _owns_local_device
 		owns_local_device = false
 		use_local_device = false
 	
-	shader_name = _shader_name
+	shader = _shader
 	
 	# Register the device
 	if owns_local_device: AcerolaShaderCompiler.register_device(rd)
 	
 	# "get_compute_kernel_compilations_for_device" will compile the shader for us if it's not already compiled
-	for kernel in AcerolaShaderCompiler.get_compute_kernel_compilations_for_device(shader_name, rd):
+	for kernel in AcerolaShaderCompiler.get_compute_kernel_compilations_for_device(shader, rd):
 		kernels.push_back(rd.compute_pipeline_create(kernel))
 	
-	shader_id = AcerolaShaderCompiler.get_device_shader_id(shader_name, rd)
+	shader_id = AcerolaShaderCompiler.get_device_shader_id(shader, rd)
 
 ## Prepare the RD to run the desired kernel on the selected number of groups.
 ## If using a local RD, your last dispatch call must have submit to true or your
@@ -211,7 +211,7 @@ func _init(_shader_name: String, _rd: RenderingDevice = null, _owns_local_device
 func dispatch(kernel_index: int, x_groups: int, y_groups: int, z_groups: int, submit: bool = false) -> void:
 	assert(use_local_device or not submit, "Can't Submit on Global Rendering Device.")
 	
-	var global_shader_id: RID = AcerolaShaderCompiler.get_device_shader_id(shader_name, rd)
+	var global_shader_id: RID = AcerolaShaderCompiler.get_device_shader_id(shader, rd)
 	
 	# Recreate kernel pipelines if shader was recompiled
 	if shader_id != global_shader_id:
@@ -222,7 +222,7 @@ func dispatch(kernel_index: int, x_groups: int, y_groups: int, z_groups: int, su
 		uniform_set_gpu_id = rd.uniform_set_create(uniform_set_cache, global_shader_id, 0)
 		
 		kernels.clear()
-		for kernel in AcerolaShaderCompiler.get_compute_kernel_compilations_for_device(shader_name, rd):
+		for kernel in AcerolaShaderCompiler.get_compute_kernel_compilations_for_device(shader, rd):
 			kernels.push_back(rd.compute_pipeline_create(kernel))
 	
 	# If compilation failed, do not dispatch anything and return
@@ -258,7 +258,7 @@ func sync() -> void:
 		push_error("\"sync\" can only be called after a submit.")
 #endregion
 
-func _notification(what):
+func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		for kernel in kernels:
 			rd.free_rid(kernel)
