@@ -1,4 +1,3 @@
-#kernel ComputeBoids
 
 #include "multimesh_helper.acomputeinc"
 
@@ -45,7 +44,7 @@ vec2 steer_towards(vec2 direction, vec2 velocity) {
 	return steer;
 }
 
-[numthreads(1024, 1, 1)]
+#kernel [numthreads(1024, 1, 1)]
 void ComputeBoids() {
 	uint id = gl_GlobalInvocationID.x;
 	if (id >= boid_count) return;

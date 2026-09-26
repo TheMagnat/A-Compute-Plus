@@ -143,7 +143,7 @@ func compute(delta: float) -> void:
 func sync() -> void:
 	if not isComputing: return
 	
-	rd.sync()
+	boidsCompute.sync()
 	isComputing = false
 	
 	# Now that sync was called, we can use the computed data.

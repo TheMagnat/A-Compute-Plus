@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b4noapyyvmmcl"]
 
-[ext_resource type="Script" uid="uid://cm4vfkiwalf6l" path="res://DemoCompositor/exposure_shader.gd" id="1_s3f4y"]
+[ext_resource type="Script" uid="uid://cm4vfkiwalf6l" path="res://Demos/DemoCompositor/exposure_shader.gd" id="1_s3f4y"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_pygu6"]
 sky_horizon_color = Color(0.66224277, 0.6717428, 0.6867428, 1)
