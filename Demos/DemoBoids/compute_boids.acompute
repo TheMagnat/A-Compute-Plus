@@ -114,7 +114,7 @@ void ComputeBoids() {
     transformData[selfTransformIndex + INSTANCE_Y_POS] = pos.y;
 
     if (speed > 1e-5) {
-		vec2 dir = vel / length(vel);
+		vec2 dir = vel / speed;
     
 		vec2 y_axis = -dir;
 		vec2 x_axis = vec2(-dir.y, dir.x);
