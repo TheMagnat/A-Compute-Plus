@@ -59,8 +59,6 @@ var hot_reload: bool = false:
 	set(value):
 		if hot_reload == value: return
 		
-		print("SET VALUE ON: ", _get_compiler_instance())
-		
 		var instance: Node = _get_compiler_instance()
 		if instance:
 			@warning_ignore("unsafe_property_access")
@@ -68,7 +66,7 @@ var hot_reload: bool = false:
 			_save_compiler_state()
 			
 		hot_reload = value
-		
+
 var auto_compile_on_global_rd: bool = false:
 	set(value):
 		if auto_compile_on_global_rd == value: return
