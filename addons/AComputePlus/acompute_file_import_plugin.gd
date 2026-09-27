@@ -33,8 +33,6 @@ func _import(
 ) -> Error:
 	var error: Error
 	
-	print("Save path: ", save_path)
-	
 	var compute_shader := AComputeShader.new()
 	error = _parse_acompute(compute_shader, source_file)
 	if error != OK:
@@ -48,12 +46,13 @@ func _import(
 	
 	return OK
 
-func get_shader_name(file_path: String) -> String:
+#region Parsing
+func _get_shader_name(file_path: String) -> String:
 	return file_path.get_file().split(".")[0]
 
 func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: String) -> Error:
 	# Get the name
-	acompute_shader.shader_name = get_shader_name(compute_shader_file_path)
+	acompute_shader.shader_name = _get_shader_name(compute_shader_file_path)
 	
 	var raw_shader_code_string: String = FileAccess.get_file_as_string(compute_shader_file_path)
 	if FileAccess.get_open_error() != OK:
@@ -90,7 +89,7 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 			
 			# Extract thread groups
 			if line.contains('numthreads'):
-				var thread_groups = line.split('(')[-1].split(')')[0].split(',')
+				var thread_groups: PackedStringArray = line.split('(')[-1].split(')')[0].split(',')
 				if thread_groups.size() != 3:
 					push_error("Failed to compile: " + compute_shader_file_path)
 					push_error("Reason: #kernel thread group syntax error")
@@ -142,3 +141,4 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 	acompute_shader.kernel_to_thread_group = kernel_to_thread_group
 	
 	return OK
+#endregion
