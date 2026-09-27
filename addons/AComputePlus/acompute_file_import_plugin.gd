@@ -3,8 +3,6 @@ extends EditorImportPlugin
 
 var void_function_regex := RegEx.create_from_string(r"^\s*void\s+(\w+)\s*\(\s*\)")
 
-const USE_INCLUDE: bool = true # To allow the usage of includes until this proposal get accepted and completed: https://github.com/godotengine/godot-proposals/issues/6691
-
 func _get_importer_name() -> String:
 	return "ACompute.acompute"
 
@@ -51,6 +49,8 @@ func _get_shader_name(file_path: String) -> String:
 	return file_path.get_file().split(".")[0]
 
 func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: String) -> Error:
+	var use_includes: bool = ProjectSettings.get_setting("AComputePlus/use_includes", true)
+	
 	# Get the name
 	acompute_shader.shader_name = _get_shader_name(compute_shader_file_path)
 	
@@ -60,7 +60,7 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 	
 	var raw_lines: PackedStringArray = raw_shader_code_string.split("\n")
 	var kernel_names: Array[String]
-	var kernel_to_thread_group: Dictionary[String, PackedStringArray] # kname -> [x,y,z]
+	var kernel_thread_groups: Array[PackedInt32Array] # kernel index -> [x,y,z]
 	
 	# Read reconized preprocessed instructions
 	var line_counter : int = 0
@@ -83,27 +83,29 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 			
 			var kernel_name: String = regex_match.get_string(1)
 			
-			kernel_names.push_back(kernel_name)
-			raw_lines.remove_at(line_counter)
-			line_counter -= 1
-			
 			# Extract thread groups
-			if line.contains('numthreads'):
-				var thread_groups: PackedStringArray = line.split('(')[-1].split(')')[0].split(',')
-				if thread_groups.size() != 3:
-					push_error("Failed to compile: " + compute_shader_file_path)
-					push_error("Reason: #kernel thread group syntax error")
-					return FAILED
-				
-				kernel_to_thread_group[kernel_name] = PackedStringArray()
-				for n in thread_groups.size():
-					kernel_to_thread_group[kernel_name].push_back((thread_groups[n].strip_edges()))
-			else:
+			if not line.contains('numthreads'):
 				push_error("Failed to compile: " + compute_shader_file_path)
 				push_error("Reason: kernel thread group count not found")
 				return FAILED
-		
-		elif USE_INCLUDE and line.begins_with("#include "):
+			
+			var thread_groups: PackedStringArray = line.split('(')[-1].split(')')[0].split(',')
+			if thread_groups.size() != 3:
+				push_error("Failed to compile: " + compute_shader_file_path)
+				push_error("Reason: #kernel thread group syntax error")
+				return FAILED
+			
+			var thread_group := PackedInt32Array()
+			for n in thread_groups.size():
+				thread_group.push_back(int(thread_groups[n]))
+			
+			kernel_names.push_back(kernel_name)
+			kernel_thread_groups.push_back(thread_group)
+			
+			raw_lines.remove_at(line_counter)
+			line_counter -= 1
+			
+		elif use_includes and line.begins_with("#include "):
 			var include_path: String = line.split("#include")[1].strip_edges()
 			var path: String = include_path.substr(1, include_path.length() - 2)
 			
@@ -136,9 +138,36 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 			push_error("Reason: " + kname + " kernel not found!")
 			return FAILED
 	
-	acompute_shader.code = "\n".join(raw_lines)
+	# Compile each kernel
+	var kernels_spirv: Array[RDShaderSPIRV]
+	for i: int in kernel_names.size():
+		var kernel_name: String = kernel_names[i]
+		var tg: PackedInt32Array = kernel_thread_groups[i]
+		
+		var base_code : String = "#version 450\n" \
+			+ "layout(local_size_x = %d, local_size_y = %d, local_size_z = %d) in;" % [tg[0], tg[1], tg[2]] \
+			+ "\n".join(raw_lines)
+		
+		var code: String = base_code.replace(kernel_name, "main")
+		
+		var src := RDShaderSource.new()
+		src.language = RenderingDevice.SHADER_LANGUAGE_GLSL
+		src.source_compute = code
+		
+		## You can deactivate cache her for testing purposes
+		var spirv: RDShaderSPIRV = RenderingServer.get_rendering_device().shader_compile_spirv_from_source(src, true)
+		if spirv.compile_error_compute != "":
+			push_error(spirv.compile_error_compute)
+			push_error("In: " + code)
+			return FAILED
+		
+		kernels_spirv.push_back(spirv)
+		
+		print("- Compiling to SPIR-V Kernel : %s" % [kernel_name])
+	
 	acompute_shader.kernel_names = kernel_names
-	acompute_shader.kernel_to_thread_group = kernel_to_thread_group
+	acompute_shader.kernel_thread_groups = kernel_thread_groups
+	acompute_shader.kernel_spirv = kernels_spirv
 	
 	return OK
 #endregion

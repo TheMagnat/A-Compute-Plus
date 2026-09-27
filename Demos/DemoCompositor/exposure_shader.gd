@@ -33,7 +33,9 @@ func _render_callback(p_effect_callback_type: int, p_render_data: RenderData) ->
 		push_error("Rendering to 0x0 buffer")
 		return
 	
+	@warning_ignore("integer_division")
 	var x_groups: int = (size.x - 1) / 8 + 1
+	@warning_ignore("integer_division")
 	var y_groups: int = (size.y - 1) / 8 + 1
 	var z_groups: int = 1
 	

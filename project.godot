@@ -17,7 +17,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
-AcerolaShaderCompiler="*uid://binhf11vqhiw7"
+AcerolaShaderCompiler="*uid://d2rruf3m2d0vf"
 
 [debug]
 

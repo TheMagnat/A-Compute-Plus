@@ -12,8 +12,10 @@ var device_refs: Dictionary[int, WeakRef] = {}
 #endregion
 
 ## Options
-var HOT_RELOADING: bool = true:
+@export var HOT_RELOADING: bool = false:
 	set(value):
+		if value == HOT_RELOADING: return
+		
 		HOT_RELOADING = value
 		
 		if HOT_RELOADING:
@@ -21,8 +23,10 @@ var HOT_RELOADING: bool = true:
 		else:
 			_hot_reload_unregister_all()
 
-var AUTO_GLOBAL_COMPILE: bool = true:
+@export var AUTO_GLOBAL_COMPILE: bool = false:
 	set(value):
+		if value == AUTO_GLOBAL_COMPILE: return
+		
 		AUTO_GLOBAL_COMPILE = value
 		
 		if AUTO_GLOBAL_COMPILE:
@@ -104,28 +108,14 @@ func _compile_acompute_on_device(shader: AComputeShader, rd: RenderingDevice) ->
 	
 	# Compile each kernel
 	var kernels: Array[RID]
-	for kname: String in shader.kernel_names:
-		var tg: PackedStringArray = shader.kernel_to_thread_group[kname]
-		var base_code : String = "#version 450\n" \
-			+ "layout(local_size_x = %s, local_size_y = %s, local_size_z = %s) in;" % [tg[0], tg[1], tg[2]] \
-			+ shader.code
+	for i: int in shader.kernel_spirv.size():
+		var spirv: RDShaderSPIRV = shader.kernel_spirv[i]
 		
-		var code: String = base_code.replace(kname, "main")
-		
-		var src := RDShaderSource.new()
-		src.language = RenderingDevice.SHADER_LANGUAGE_GLSL
-		src.source_compute = code
-		var spirv := rd.shader_compile_spirv_from_source(src)
-		if spirv.compile_error_compute != "":
-			push_error(spirv.compile_error_compute)
-			push_error("In: " + code)
-			return false
-		
-		var shader_rid := rd.shader_create_from_spirv(spirv)
+		var shader_rid := rd.shader_create_from_spirv(spirv, "%s_%s" % [shader.shader_name, shader.kernel_names[i]])
 		if not shader_rid.is_valid():
 			return false
 		
-		print("- Compiling Kernel (device %d): %s" % [id, kname])
+		print("- Compiling Kernel (device %d): %s" % [id, shader.kernel_names[i]])
 		kernels.push_back(shader_rid)
 	
 	device_compute_kernel_compilations[id][shader] = kernels
@@ -179,11 +169,13 @@ func get_device_shader_id(shader: AComputeShader, rd: RenderingDevice) -> RID:
 	##      delete and reload the autoload. This break all our computations.
 	##      This my get fixed with https://github.com/godotengine/godot/pull/123532
 	##      When it get fixed, just remove the lines under this comment (in the if)
-	if Engine.is_editor_hint():
-		var debug_id: int = _device_id(rd)
-		_ensure_device_maps(rd)
-		if shader not in device_compute_kernel_compilations[debug_id]:
-			compile_shader_on_device(shader, rd)
+	##      Note: This bug does not occurs when using a scene instead of a script
+	##            as an autoload. I leave this comment here for the moment
+	#if Engine.is_editor_hint():
+		#var debug_id: int = _device_id(rd)
+		#_ensure_device_maps(rd)
+		#if shader not in device_compute_kernel_compilations[debug_id]:
+			#compile_shader_on_device(shader, rd)
 	
 	var id: int = _device_id(rd)
 	assert(id in device_refs)
@@ -201,9 +193,6 @@ func _init() -> void:
 	# Register the Global Rendering Device
 	var global_rd: RenderingDevice = RenderingServer.get_rendering_device()
 	register_device(global_rd)
-	
-	if AUTO_GLOBAL_COMPILE:
-		_compile_all_shaders_on_device(global_rd)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:

@@ -1,0 +1,8 @@
+[gd_scene format=3 uid="uid://d2rruf3m2d0vf"]
+
+[ext_resource type="Script" uid="uid://binhf11vqhiw7" path="res://addons/AComputePlus/acerola_shader_compiler.gd" id="1_1a4dd"]
+
+[node name="AcerolaShaderCompiler" type="Node" unique_id=1664959449]
+script = ExtResource("1_1a4dd")
+HOT_RELOADING = true
+AUTO_GLOBAL_COMPILE = true
