@@ -36,6 +36,7 @@ You can refer to the demo project to see how to use the addon.
 
 * Make usage of "shader_compile_binary_from_spirv" to go further with the caching, allowing us to cache a compiled version of the kernels on local clients, but it have to be done at runtime since it's GPU and Driver dependant.
 * Watch for include files changes for hot reloading to work with includes.
+* Better error displaying when your shaders fail to compile, currently it print the whole source code, it's a bit indigestible.
 
 ## Contributing
 
