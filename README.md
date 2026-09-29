@@ -30,7 +30,7 @@ You can refer to the demo project to see how to use the addon.
 - ~~Having more than one ACompute shader with the same name does not work to the way we store shaders. This is a limitation that could be easily fixed.~~ Fixed with `AComputeShader`
 - ~~Hot reloading does not work with new files. You must restart your scene.~~ Fixed with `AComputeShader`
 - Using sparse binding in your ACompute shaders (ex: 0, 2, 3) will result in an error. This is a limitation that could be easily fixed.
-- Currently editing an include file won't trigger a Hot Reload, I'm planning to add this features soon.
+- ~~Currently editing an include file won't trigger a Hot Reload, I'm planning to add this features soon.~~ Still the case BUT everything is in place for it to work. The problem is that there is currently a bug preventing us from using the method `append_import_external_resource`. We have to wait for this [issue](https://github.com/godotengine/godot/issues/123950) to get fixed.
 
 ## Planned
 

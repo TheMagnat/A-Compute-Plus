@@ -25,6 +25,11 @@ func _get_import_options(_path: String, _preset_index: int) -> Array[Dictionary]
 	#return [{"name": "my_option", "default_value": false}]
 	return []
 
+func _get_import_order() -> int:
+	# Since we want the include files to be imported first,
+	# we set a higher order (lower priority) to AComputeShader.
+	return 1
+
 func _import(
 	source_file: String, save_path: String, _options: Dictionary,
 	_platform_variants: Array[String], _gen_files: Array[String]
@@ -34,7 +39,7 @@ func _import(
 	var compute_shader := AComputeShader.new()
 	error = _parse_acompute(compute_shader, source_file)
 	if error != OK:
-		return error
+		push_warning("Failed to compile %s" % source_file)
 	
 	error = ResourceSaver.save(compute_shader, "%s.%s" % [save_path, _get_save_extension()])
 	if error != OK:
@@ -57,6 +62,8 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 	var raw_shader_code_string: String = FileAccess.get_file_as_string(compute_shader_file_path)
 	if FileAccess.get_open_error() != OK:
 		return FileAccess.get_open_error()
+	
+	var includes: Array[AComputeShaderInclude]
 	
 	var raw_lines: PackedStringArray = raw_shader_code_string.split("\n")
 	var kernel_names: Array[String]
@@ -111,6 +118,14 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 			
 			if not path.begins_with("res://"):
 				path = compute_shader_file_path.get_base_dir().path_join(path)
+			
+			var shader_include: AComputeShaderInclude = load(path)
+			if not shader_include:
+				push_error("Failed to compile: " + compute_shader_file_path)
+				push_error("Reason: Can't find #include file at path: %s" % path)
+				return FAILED
+			
+			includes.push_back(shader_include)
 			
 			var include_file := FileAccess.open(path, FileAccess.READ)
 			var raw_include_lines: PackedStringArray = include_file.get_as_text().split("\n")
@@ -168,6 +183,17 @@ func _parse_acompute(acompute_shader: AComputeShader, compute_shader_file_path: 
 	acompute_shader.kernel_names = kernel_names
 	acompute_shader.kernel_thread_groups = kernel_thread_groups
 	acompute_shader.kernel_spirv = kernels_spirv
+	
+	# Link this shader path to all its includes to reimport it if an include changes
+	for include: AComputeShaderInclude in includes:
+		pass
+		#TODO: This line allow hot reloading when editing an include file.
+		#      However, there is currently a bug when calling append_import_external_resource.
+		#      It make the current resource not emit its changed signal, making the hot reload
+		#      fail since it's based on this event to detect a change. I reported the bug here
+		#      https://github.com/godotengine/godot/issues/123950 or we wait for it to be fixed
+		#      or we find a workaround.
+		#append_import_external_resource(include.resource_path, {"parent_shader": compute_shader_file_path})
 	
 	return OK
 #endregion

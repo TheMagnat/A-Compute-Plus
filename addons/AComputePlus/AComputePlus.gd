@@ -5,6 +5,8 @@ const PLUGIN_NAME: String = "AComputePlus"
 const SHADER_COMPILER_AUTOLOAD_NAME: String = "AcerolaShaderCompiler"
 
 var acerola_file_import_plugin: EditorImportPlugin
+var acerola_include_file_import_plugin: EditorImportPlugin
+var acerola_include_file_export_plugin: EditorExportPlugin
 
 var acerola_shader_compiler_ref: Node = null
 
@@ -18,9 +20,21 @@ func _enter_tree() -> void:
 	acerola_file_import_plugin = preload("acompute_file_import_plugin.gd").new()
 	add_import_plugin(acerola_file_import_plugin)
 	
+	acerola_include_file_import_plugin = preload("acompute_include_file_import_plugin.gd").new()
+	add_import_plugin(acerola_include_file_import_plugin)
+	
+	acerola_include_file_export_plugin = preload("acompute_include_file_export_plugin.gd").new()
+	add_export_plugin(acerola_include_file_export_plugin)
+	
 	_setup_settings()
 
 func _exit_tree() -> void:
+	remove_export_plugin(acerola_include_file_export_plugin)
+	acerola_include_file_export_plugin = null
+	
+	remove_import_plugin(acerola_include_file_import_plugin)
+	acerola_include_file_import_plugin = null
+
 	remove_import_plugin(acerola_file_import_plugin)
 	acerola_file_import_plugin = null
 
@@ -105,14 +119,14 @@ func _on_settings_changed() -> void:
 
 #region File Editing
 func _handles(object: Object) -> bool:
-	return object is AComputeShader
+	return object is AComputeShader or object is AComputeShaderInclude
 
 func _edit(object: Object) -> void:
 	if not object: return
 	
-	var shader: AComputeShader = object as AComputeShader
+	var resource: Resource = object as Resource
 	
-	var path: String = shader.resource_path
+	var path: String = resource.resource_path
 	if path: 
 		OS.shell_open(ProjectSettings.globalize_path(path))
 #endregion
