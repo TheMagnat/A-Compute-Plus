@@ -1,0 +1,14 @@
+[remap]
+
+importer="ACompute.acompute"
+type="AComputeShader"
+uid="uid://bppbk1mahjr4d"
+path="res://.godot/imported/compute_boids.acompute-90eddd58a7f518df643544a13b048c3e.tres"
+
+[deps]
+
+source_file="res://Demos/DemoBoids/compute_boids.acompute"
+dest_files=["res://.godot/imported/compute_boids.acompute-90eddd58a7f518df643544a13b048c3e.tres"]
+
+[params]
+

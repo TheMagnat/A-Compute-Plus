@@ -1,0 +1,14 @@
+[remap]
+
+importer="ACompute.acomputeinc"
+type="AComputeShaderInclude"
+uid="uid://dlu2plq2yp10d"
+path="res://.godot/imported/multimesh_helper.acomputeinc-d55a693ce0aa223262aea057e05ab6ca.tres"
+
+[deps]
+
+source_file="res://Demos/DemoBoids/multimesh_helper.acomputeinc"
+dest_files=["res://.godot/imported/multimesh_helper.acomputeinc-d55a693ce0aa223262aea057e05ab6ca.tres"]
+
+[params]
+

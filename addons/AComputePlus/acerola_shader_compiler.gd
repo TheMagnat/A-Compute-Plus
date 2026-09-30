@@ -96,8 +96,6 @@ func _compile_acompute_on_device(shader: AComputeShader, rd: RenderingDevice) ->
 	var id: int = _device_id(rd)
 	assert(id in device_refs)
 	
-	print("Compiling Compute Shader (device %d): %s" % [id, shader.shader_name])
-	
 	# Free any old kernels for this device/file
 	if shader in device_compute_kernel_compilations[id]:
 		for krid: RID in device_compute_kernel_compilations[id][shader]:
@@ -105,6 +103,12 @@ func _compile_acompute_on_device(shader: AComputeShader, rd: RenderingDevice) ->
 				rd.free_rid(krid)
 		@warning_ignore("unsafe_method_access")
 		device_compute_kernel_compilations[id][shader].clear()
+	
+	if shader.kernel_spirv.is_empty():
+		print("[AC] Skipped empty Compute Shader (device %d): %s" % [id, shader.shader_name])
+		return false
+	
+	print("[AC] Compiling Compute Shader (device %d): %s" % [id, shader.shader_name])
 	
 	# Compile each kernel
 	var kernels: Array[RID]
@@ -115,7 +119,7 @@ func _compile_acompute_on_device(shader: AComputeShader, rd: RenderingDevice) ->
 		if not shader_rid.is_valid():
 			return false
 		
-		print("- Compiling Kernel (device %d): %s" % [id, shader.kernel_names[i]])
+		print("[AC] - Compiling Kernel (device %d): %s" % [id, shader.kernel_names[i]])
 		kernels.push_back(shader_rid)
 	
 	device_compute_kernel_compilations[id][shader] = kernels
@@ -171,11 +175,11 @@ func get_device_shader_id(shader: AComputeShader, rd: RenderingDevice) -> RID:
 	##      When it get fixed, just remove the lines under this comment (in the if)
 	##      Note: This bug does not occurs when using a scene instead of a script
 	##            as an autoload. I leave this comment here for the moment
-	#if Engine.is_editor_hint():
-		#var debug_id: int = _device_id(rd)
-		#_ensure_device_maps(rd)
-		#if shader not in device_compute_kernel_compilations[debug_id]:
-			#compile_shader_on_device(shader, rd)
+	if Engine.is_editor_hint():
+		var debug_id: int = _device_id(rd)
+		_ensure_device_maps(rd)
+		if shader not in device_compute_kernel_compilations[debug_id]:
+			compile_shader_on_device(shader, rd)
 	
 	var id: int = _device_id(rd)
 	assert(id in device_refs)
@@ -233,7 +237,7 @@ func _on_shader_changed(shader: AComputeShader) -> void:
 			var rd: RenderingDevice = wr.get_ref() if wr else null
 			assert(rd != null, "Rendering device freed witout calling \"unregister_device\".")
 			
-			print("Hot Realoading (device %d): %s" % [device_id, shader.shader_name])
+			print("[AC] Hot Realoading (device %d): %s" % [device_id, shader.shader_name])
 			
 			compile_shader_on_device(shader, rd)
 #endregion

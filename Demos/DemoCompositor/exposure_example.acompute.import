@@ -1,0 +1,14 @@
+[remap]
+
+importer="ACompute.acompute"
+type="AComputeShader"
+uid="uid://bx45neago7iew"
+path="res://.godot/imported/exposure_example.acompute-c3e87a6e160cfcf18701b9a5e7acc032.tres"
+
+[deps]
+
+source_file="res://Demos/DemoCompositor/exposure_example.acompute"
+dest_files=["res://.godot/imported/exposure_example.acompute-c3e87a6e160cfcf18701b9a5e7acc032.tres"]
+
+[params]
+

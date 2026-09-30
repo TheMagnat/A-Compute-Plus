@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://binhf11vqhiw7" path="res://addons/AComputePlus/acerola_shader_compiler.gd" id="1_1a4dd"]
 
-[node name="AcerolaShaderCompiler" type="Node" unique_id=701322453]
+[node name="AcerolaShaderCompiler" type="Node" unique_id=585199161]
 script = ExtResource("1_1a4dd")
 HOT_RELOADING = true
 AUTO_GLOBAL_COMPILE = true

@@ -159,5 +159,5 @@ func _physics_process(delta: float) -> void:
 
 func registerComputeShader() -> void:
 	rd = RenderingServer.create_local_rendering_device()
-	boidsCompute = ACompute.new(preload("uid://c2y8jqw52oss8"), rd, true)
-	#boidsCompute = ACompute.new(preload("res://Demos/DemoBoids/compute_boids.acompute"), rd, true)
+	#boidsCompute = ACompute.new(preload("uid://bppbk1mahjr4d"), rd, true)
+	boidsCompute = ACompute.new(preload("res://Demos/DemoBoids/compute_boids.acompute"), rd, true)
