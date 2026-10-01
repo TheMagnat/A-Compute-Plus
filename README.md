@@ -14,14 +14,30 @@ Because ACompute is technically a custom shader language, it needs its own inter
 
 - Parsing include files using the `#include "path"` instruction in your ACompute Shaders.
 - Ability to use Local Devices instead of Global Rendering Devices.
-- Usage of storage buffers.
+- Usage of storage buffers. Methods to set a storage buffer, clear or partially update it are available.
 - Merges "#kernel" and "[numthreads(x, y, z)]" declarations with an unique "#kernel [numthreads(x, y, z)]" to put before your functions. Inspired from [Essojadojef](https://github.com/Essojadojef) work.
 - New custom resource `AComputeShader`. This resource got it's own `EditorImportPlugin`, allowing Godot editor to scan and import our files. They are then pre-parsed and stored as ResourceFiles. The `AcerolaShaderCompiler` just have to compile the code directly. This allow us to make usage of the Godot auto-reimport system and signals for the hot reload (without having to scan every frames for any changes which was the old way). The resources are shown in the editor when the plugin is activated and clicking on it will open the ACompute shader file in an external editor. This was sugested by [nonchip](github.com/GarrettGunnell/Acerola-Compute/issues/6).
 - Caching the SPIR-V code inside `AComputeShader`.
 
 ## Usage
 
-You can refer to the demo project to see how to use the addon.
+Create a new file with the extension `.acompute` in your project. They will automatically be recognized by the plugin and be compiled on changes.
+You can also create `.acomputeinc` files to be used as includes in your ACompute shaders.
+
+An ACompute shader must declare at least one kernel using the directive `#kernel [numthreads(x, y, z)]` (with x, y and z positive integers). There is no limit to the number of kernels you can declare in an ACompute shader.
+
+You can create a new `ACompute` resource by passing it an `AComputeShader` resource (you can also inject a local `RenderingDevice` here and set its ownership. Ownership to true will let `ACompute` handle the release of the rendering device).
+
+Once your ACompute resource is ready, you can send data to GPU using the different methods like:
+- set_uniform_buffer
+- set_storage_buffer
+- set_texture
+
+Please refer directly to the `ACompute` documentation to learn more about the available methods.
+
+You can then use the `dispatch` method to start processing (if your using a local rendering device, you must set `submit` to true in your last dispatch call, then you can use the `sync` to wait for the compute to finish and retrieve your data).
+
+You can refer to the exemples provided in the demo directory, you will find an exemple using it in the environment compositor and one using it to update a Multimesh buffer.
 
 * You can set `interface/editor/behavior/import_resources_when_unfocused` in your editor settings to true if you want your shaders to be reloaded when Godot is not focused.
 
@@ -36,7 +52,6 @@ You can refer to the demo project to see how to use the addon.
 
 * Make usage of "shader_compile_binary_from_spirv" to go further with the caching, allowing us to cache a compiled version of the kernels on local clients, but it have to be done at runtime since it's GPU and Driver dependant.
 * Watch for include files changes for hot reloading to work with includes.
-* Better error displaying when your shaders fail to compile, currently it print the whole source code, it's a bit indigestible.
 
 ## Contributing
 
