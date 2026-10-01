@@ -96,9 +96,10 @@ func set_storage_buffer(binding: int, storage_array: PackedByteArray) -> void:
 			storage_buffer_cache_size[binding] = byte_size
 			return
 		
-		# Otherwise, free the memory because footprint no longer matches
-		rd.free_rid(storage_buffer_id_cache[binding])
-	
+		# Otherwise, free the memory if we own it because footprint no longer matches
+		if storage_buffer_cache_size[binding] != -1:
+			rd.free_rid(storage_buffer_id_cache[binding])
+
 	# Instantiate storage buffer in gpu memory and declare uniform descriptor
 	var storage_buffer_id := rd.storage_buffer_create(storage_array.size(), storage_array)
 	
@@ -113,14 +114,14 @@ func set_storage_buffer(binding: int, storage_array: PackedByteArray) -> void:
 	
 	_cache_uniform(u)
 
-## Store an empty buffer
+## Store an empty storage buffer
 func set_empty_storage_buffer(binding: int, byte_size: int) -> void:
 	var storage_array := PackedByteArray()
 	storage_array.resize(byte_size)
 	
 	set_storage_buffer(binding, storage_array)
 
-## Store an existing buffer.
+## Store an existing storage buffer.
 ## Buffer must have been created on the same RD.
 ## Note: This is useful to share data without involving CPU reading and writing
 ##       between multiple shaders.
@@ -134,19 +135,41 @@ func set_storage_buffer_rid(binding: int, rid: RID) -> void:
 	u.binding = binding
 	u.add_id(rid)
 
-	# Cache array contents and RID
+	# Cache array contents and RID (size of -1 means we don't own the buffer)
 	storage_buffer_cache_size[binding] = -1
 	storage_buffer_id_cache[binding] = rid
 	
 	_cache_uniform(u)
+
+## Update a part of an existing storage buffer
+func update_storage_buffer(binding: int, offset_bytes: int, data: PackedByteArray) -> void:
+	assert(binding in storage_buffer_id_cache, "No storage buffer set on binding %d." % [binding])
+	assert(_assert_range(offset_bytes, data.size(), storage_buffer_cache_size[binding]))
+	
+	rd.buffer_update(storage_buffer_id_cache[binding], offset_bytes, data.size(), data)
+
+## Fill a part of a storage buffer with zeros directly on the GPU.
+## size_bytes = 0 clears from offset_bytes to the end of the buffer
+func clear_storage_buffer(binding: int, offset_bytes: int = 0, size_bytes: int = 0) -> void:
+	assert(binding in storage_buffer_id_cache, "No storage buffer set on binding %d." % [binding])
+	var buffer_size: int = storage_buffer_cache_size[binding]
+	if size_bytes == 0:
+		assert(buffer_size != -1, "Buffer size unknown on binding %d, provide size_bytes." % [binding])
+		size_bytes = buffer_size - offset_bytes
+	
+	assert(_assert_range(offset_bytes, size_bytes, buffer_size))
+	
+	rd.buffer_clear(storage_buffer_id_cache[binding], offset_bytes, size_bytes)
 #endregion
 
 #region Data Read API
 
-func get_storage_data(binding: int) -> PackedByteArray:
-	assert(binding in storage_buffer_id_cache)
-	
-	return rd.buffer_get_data(storage_buffer_id_cache[binding])
+## Read back a storage buffer from the GPU.
+## size_bytes = 0 reads from offset_bytes to the end of the buffer.
+func get_storage_data(binding: int, offset_bytes: int = 0, size_bytes: int = 0) -> PackedByteArray:
+	assert(binding in storage_buffer_id_cache, "No storage buffer set on binding %d." % [binding])
+
+	return rd.buffer_get_data(storage_buffer_id_cache[binding], offset_bytes, size_bytes)
 
 #endregion
 
@@ -171,6 +194,26 @@ func _cache_uniform(u: RDUniform) -> void:
 					break
 	
 	uniform_set_cache[u.binding] = u
+
+# Note: Should be called inside an assert to prevent running it in release build
+func _assert_range(offset_bytes: int, size_bytes: int, buffer_size: int) -> bool:
+	var test: bool = offset_bytes >= 0 and offset_bytes % 4 == 0
+	if not test:
+		assert(test, "Offset (%d) must be a positive multiple of 4." % [offset_bytes])
+		return false
+	
+	test = size_bytes > 0 and size_bytes % 4 == 0
+	if not test:
+		assert(test, "Size (%d) must be a positive multiple of 4." % [size_bytes])
+		return false
+	
+	# buffer_size = -1 means unknown size (buffer given through set_storage_buffer_rid)
+	test = buffer_size == -1 or offset_bytes + size_bytes <= buffer_size
+	if not test:
+		assert(test, "Range [%d, %d[ out of buffer bounds (%d bytes)." % [offset_bytes, offset_bytes + size_bytes, buffer_size])
+		return false
+	
+	return true
 #endregion
 
 #region Public API
@@ -256,7 +299,7 @@ func sync() -> void:
 		rd.sync()
 		submited = false
 	elif not kernels.is_empty():
-		# Here we try to sync while not having subtimed anything and the shader is compiled
+		# Here we try to sync while not having submitted anything and the shader is compiled
 		push_error("\"sync\" can only be called after a submit.")
 #endregion
 
@@ -271,7 +314,9 @@ func _notification(what: int) -> void:
 		uniform_buffer_id_cache.clear()
 		
 		for binding: int in storage_buffer_id_cache:
-			rd.free_rid(storage_buffer_id_cache[binding])
+			# Buffers given through set_storage_buffer_rid are not owned by us
+			if storage_buffer_cache_size[binding] != -1:
+				rd.free_rid(storage_buffer_id_cache[binding])
 		storage_buffer_id_cache.clear()
 		
 		if rd.uniform_set_is_valid(uniform_set_gpu_id): rd.free_rid(uniform_set_gpu_id)
