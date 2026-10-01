@@ -8,7 +8,7 @@ var acerola_file_import_plugin: EditorImportPlugin
 var acerola_include_file_import_plugin: EditorImportPlugin
 var acerola_include_file_export_plugin: EditorExportPlugin
 
-var acerola_shader_compiler_ref: Node = null
+var filesystem_create_menu: EditorContextMenuPlugin
 
 func _enable_plugin() -> void:
 	add_autoload_singleton(SHADER_COMPILER_AUTOLOAD_NAME, "acerola_shader_compiler.tscn")
@@ -26,9 +26,17 @@ func _enter_tree() -> void:
 	acerola_include_file_export_plugin = preload("acompute_include_file_export_plugin.gd").new()
 	add_export_plugin(acerola_include_file_export_plugin)
 	
+	filesystem_create_menu = preload("acompute_filesystem_context_plugin.gd").new()
+	add_context_menu_plugin(
+		EditorContextMenuPlugin.CONTEXT_SLOT_FILESYSTEM_CREATE,
+		filesystem_create_menu
+	)
+	
 	_setup_settings()
 
 func _exit_tree() -> void:
+	remove_context_menu_plugin(filesystem_create_menu)
+	
 	remove_export_plugin(acerola_include_file_export_plugin)
 	acerola_include_file_export_plugin = null
 	

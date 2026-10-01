@@ -18,10 +18,13 @@ Because ACompute is technically a custom shader language, it needs its own inter
 - Merges "#kernel" and "[numthreads(x, y, z)]" declarations with an unique "#kernel [numthreads(x, y, z)]" to put before your functions. Inspired from [Essojadojef](https://github.com/Essojadojef) work.
 - New custom resource `AComputeShader`. This resource got it's own `EditorImportPlugin`, allowing Godot editor to scan and import our files. They are then pre-parsed and stored as ResourceFiles. The `AcerolaShaderCompiler` just have to compile the code directly. This allow us to make usage of the Godot auto-reimport system and signals for the hot reload (without having to scan every frames for any changes which was the old way). The resources are shown in the editor when the plugin is activated and clicking on it will open the ACompute shader file in an external editor. This was sugested by [nonchip](github.com/GarrettGunnell/Acerola-Compute/issues/6).
 - Caching the SPIR-V code inside `AComputeShader`.
+- Creating `.acompute` and `.acomputeinc` on right click in the Godot FileSystem.
 
 ## Usage
 
-Create a new file with the extension `.acompute` in your project. They will automatically be recognized by the plugin and be compiled on changes.
+Create a new file with the extension `.acompute` in your project.
+The addon provide a new option in the Godot FileSystem on right click on empty space and `New ACompute Shader...` or on folder under the category `Create New` and `ACompute Shader...`.
+They will automatically be recognized by the plugin and be compiled on changes.
 You can also create `.acomputeinc` files to be used as includes in your ACompute shaders.
 
 An ACompute shader must declare at least one kernel using the directive `#kernel [numthreads(x, y, z)]` (with x, y and z positive integers). There is no limit to the number of kernels you can declare in an ACompute shader.

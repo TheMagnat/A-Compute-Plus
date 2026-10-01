@@ -30,11 +30,10 @@ func _import(
 ) -> Error:
 	var error: Error
 	
-	var old_shader_include: AComputeShaderInclude = load(source_file)
 	var linked_shaders_path: PackedStringArray
-	if old_shader_include:
+	if ResourceLoader.exists(source_file):
+		var old_shader_include: AComputeShaderInclude = ResourceLoader.load(source_file)
 		linked_shaders_path = old_shader_include.linked_shaders_path
-		old_shader_include = null
 	else:
 		linked_shaders_path = PackedStringArray()
 	
