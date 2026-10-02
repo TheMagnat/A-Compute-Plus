@@ -38,9 +38,9 @@ Once your ACompute resource is ready, you can send data to GPU using the differe
 
 Please refer directly to the `ACompute` documentation to learn more about the available methods.
 
-You can then use the `dispatch` method to start processing (if your using a local rendering device, you must set `submit` to true in your last dispatch call, then you can use the `sync` to wait for the compute to finish and retrieve your data).
+You can then use the `dispatch` method to start processing (if you're using a local rendering device, you must set `submit` to true in your last dispatch call, then you can use the `sync` to wait for the compute to finish and retrieve your data).
 
-You can refer to the exemples provided in the demo directory, you will find an exemple using it in the environment compositor and one using it to update a Multimesh buffer.
+You can refer to the examples provided in the demo directory, you will find an example using it in the environment compositor and one using it to update a `Multimesh` buffer.
 
 * You can set `interface/editor/behavior/import_resources_when_unfocused` in your editor settings to true if you want your shaders to be reloaded when Godot is not focused.
 
