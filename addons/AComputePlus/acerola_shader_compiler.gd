@@ -108,14 +108,20 @@ func _compile_acompute_on_device(shader: AComputeShader, rd: RenderingDevice) ->
 		print("[AC] Skipped empty Compute Shader (device %d): %s" % [id, shader.shader_name])
 		return false
 	
+	# Prepare to receive byte code if it's not already created
+	if shader.kernel_byte_code.is_empty():
+		shader.kernel_byte_code.resize(shader.kernel_spirv.size())
+	
 	print("[AC] Compiling Compute Shader (device %d): %s" % [id, shader.shader_name])
 	
 	# Compile each kernel
 	var kernels: Array[RID]
 	for i: int in shader.kernel_spirv.size():
-		var spirv: RDShaderSPIRV = shader.kernel_spirv[i]
+		if not shader.kernel_byte_code[i]:
+			var spirv: RDShaderSPIRV = shader.kernel_spirv[i]
+			shader.kernel_byte_code[i] = rd.shader_compile_binary_from_spirv(spirv, "%s_%s" % [shader.shader_name, shader.kernel_names[i]])
 		
-		var shader_rid := rd.shader_create_from_spirv(spirv, "%s_%s" % [shader.shader_name, shader.kernel_names[i]])
+		var shader_rid: RID = rd.shader_create_from_bytecode(shader.kernel_byte_code[i])
 		if not shader_rid.is_valid():
 			return false
 		

@@ -15,7 +15,7 @@ var current_bound_uniform_set_cpu_copy : Array
 
 # State management
 var refresh_uniforms: bool = true
-var submited: bool = false
+var submitted: bool = false
 
 ## Binding -> RID
 var texture_cache: Dictionary[int, RID] = {}
@@ -249,7 +249,7 @@ func _init(_shader: AComputeShader, _rd: RenderingDevice = null, _owns_local_dev
 ## Prepare the RD to run the desired kernel on the selected number of groups.
 ## If using a local RD, your last dispatch call must have submit to true or your
 ## command will never run.
-## Once you submited, you must call sync to retrieves your data.
+## Once you submitted, you must call sync to retrieves your data.
 ## Note: You can't set submit to true on the Global Rendering Device, Godot handle it itself.
 func dispatch(kernel_index: int, x_groups: int, y_groups: int, z_groups: int, submit: bool = false) -> void:
 	assert(use_local_device or not submit, "Can't Submit on Global Rendering Device.")
@@ -289,15 +289,15 @@ func dispatch(kernel_index: int, x_groups: int, y_groups: int, z_groups: int, su
 	
 	if submit:
 		rd.submit()
-		submited = true
+		submitted = true
 
 ## Must be called after a dispatch with submit to retrieve the data
 ## Note: You can't call sync on the Global Rendering Device, Godot handle it itself.
 func sync() -> void:
 	assert(use_local_device, "Can't sync on Global Rendering Device.")
-	if submited:
+	if submitted:
 		rd.sync()
-		submited = false
+		submitted = false
 	elif not kernels.is_empty():
 		# Here we try to sync while not having submitted anything and the shader is compiled
 		push_error("\"sync\" can only be called after a submit.")
@@ -323,5 +323,11 @@ func _notification(what: int) -> void:
 		
 		if owns_local_device and rd:
 			AcerolaShaderCompiler.unregister_device(rd)
+			
+			# Security until https://github.com/godotengine/godot/issues/124130 is fixed
+			if submitted:
+				rd.sync()
+				submitted = false
+			
 			rd.free()
 			rd = null

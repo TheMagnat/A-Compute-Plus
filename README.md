@@ -18,6 +18,7 @@ Because ACompute is technically a custom shader language, it needs its own inter
 - Merges "#kernel" and "[numthreads(x, y, z)]" declarations with an unique "#kernel [numthreads(x, y, z)]" to put before your functions. Inspired from [Essojadojef](https://github.com/Essojadojef) work.
 - New custom resource `AComputeShader`. This resource got it's own `EditorImportPlugin`, allowing Godot editor to scan and import our files. They are then pre-parsed and stored as ResourceFiles. The `AcerolaShaderCompiler` just have to compile the code directly. This allow us to make usage of the Godot auto-reimport system and signals for the hot reload (without having to scan every frames for any changes which was the old way). The resources are shown in the editor when the plugin is activated and clicking on it will open the ACompute shader file in an external editor. This was sugested by [nonchip](github.com/GarrettGunnell/Acerola-Compute/issues/6).
 - Caching the SPIR-V code inside `AComputeShader`.
+- Caching compiled `AComputeShader` bytecode in runtime.
 - Creating `.acompute` and `.acomputeinc` on right click in the Godot FileSystem.
 
 ## Usage
@@ -53,7 +54,6 @@ You can refer to the examples provided in the demo directory, you will find an e
 
 ## Planned
 
-* Make usage of "shader_compile_binary_from_spirv" to go further with the caching, allowing us to cache a compiled version of the kernels on local clients, but it have to be done at runtime since it's GPU and Driver dependant.
 * Watch for include files changes for hot reloading to work with includes.
 
 ## Contributing
